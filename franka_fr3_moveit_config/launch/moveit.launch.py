@@ -55,6 +55,7 @@ def generate_launch_description():
     robot_ip_parameter_name = 'robot_ip'
     use_fake_hardware_parameter_name = 'use_fake_hardware'
     fake_sensor_commands_parameter_name = 'fake_sensor_commands'
+    isaac_parameter_name = 'isaac'
     namespace_parameter_name = 'namespace'
 
     robot_ip = LaunchConfiguration(robot_ip_parameter_name)
@@ -62,6 +63,7 @@ def generate_launch_description():
     fake_sensor_commands = LaunchConfiguration(
         fake_sensor_commands_parameter_name)
     namespace = LaunchConfiguration(namespace_parameter_name)
+    isaac = LaunchConfiguration(isaac_parameter_name)
 
     # Command-line arguments
 
@@ -78,7 +80,8 @@ def generate_launch_description():
     robot_description_config = Command(
         [FindExecutable(name='xacro'), ' ', franka_xacro_file, ' hand:=true',
          ' robot_ip:=', robot_ip, ' use_fake_hardware:=', use_fake_hardware,
-         ' fake_sensor_commands:=', fake_sensor_commands, ' ros2_control:=true'])
+         ' fake_sensor_commands:=', fake_sensor_commands, ' ros2_control:=true',
+         ' isaac:=', isaac, ' namespace:=', namespace])
 
     robot_description = {'robot_description': ParameterValue(
         robot_description_config, value_type=str)}
@@ -270,6 +273,11 @@ def generate_launch_description():
         use_fake_hardware_parameter_name,
         default_value='false',
         description='Use fake hardware')
+    isaac_arg = DeclareLaunchArgument(
+        isaac_parameter_name,
+        default_value='false',
+        description='Use topic based ROS2 control for integration with Isaac Sim.'
+    )
     fake_sensor_commands_arg = DeclareLaunchArgument(
         fake_sensor_commands_parameter_name,
         default_value='false',

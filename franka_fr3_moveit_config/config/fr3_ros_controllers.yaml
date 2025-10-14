@@ -24,7 +24,9 @@
   fr3_arm_controller:
     ros__parameters:
       command_interfaces:
-        - effort
+        # - effort
+        - position
+        - velocity
       state_interfaces:
         - position
         - velocity
