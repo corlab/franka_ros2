@@ -23,7 +23,8 @@ from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
     IncludeLaunchDescription,
-    Shutdown
+    Shutdown,
+    OpaqueFunction
 )
 from launch.conditions import UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -40,6 +41,13 @@ from launch_ros.substitutions import FindPackageShare
 import yaml
 
 
+robot_ip_parameter_name = 'robot_ip'
+use_fake_hardware_parameter_name = 'use_fake_hardware'
+fake_sensor_commands_parameter_name = 'fake_sensor_commands'
+isaac_parameter_name = 'isaac'
+namespace_parameter_name = 'namespace'
+
+
 def load_yaml(package_name, file_path):
     package_path = get_package_share_directory(package_name)
     absolute_file_path = os.path.join(package_path, file_path)
@@ -50,13 +58,61 @@ def load_yaml(package_name, file_path):
     except EnvironmentError:  # parent of IOError, OSError *and* WindowsError where available
         return None
 
+def add_prefixes(data: dict, prefix, stem, keys=True, only_start=True, exceptions=[]):
+    """
+    Add a prefix to keys and values of a yaml file. This can be used to apply prefix data
+    to MoveIt configurations.
 
-def generate_launch_description():
-    robot_ip_parameter_name = 'robot_ip'
-    use_fake_hardware_parameter_name = 'use_fake_hardware'
-    fake_sensor_commands_parameter_name = 'fake_sensor_commands'
-    isaac_parameter_name = 'isaac'
-    namespace_parameter_name = 'namespace'
+    Example:
+    fr3_joint --> franko_fr3_joint
+
+    Arguments:
+    - data: YAML object where changes should be made
+    - prefix: Prefix to add
+    - stem: Stem where the prefix should be put before (Example: 'fr3_' --> 'PREFIXfr3_')
+    - keys: If False, only apply prefixes to values and not keys.
+    - only_start: Only add the prefix if the stem is at the beginning of the value/key (startswith)
+    - exceptions: List of keys/values that should remain unchanged.
+    """
+
+    # loop through all keys
+    keys_to_change = []
+    for key in data:
+
+        # handle exceptions
+        if data[key] in exceptions or key in exceptions:
+            continue
+        
+        # first check value
+        if type(data[key]) is dict:
+            data[key] = add_prefixes(data[key], prefix, stem, keys, only_start, exceptions)
+            continue
+
+        if type(data[key]) is list:
+            for i in range(len(data[key])):
+                if type(data[key][i]) is str and data[key][i] not in exceptions: # TODO: only_start handling
+                    data[key][i].replace(stem, prefix + stem, 1)
+                elif type(data[key][i]) is dict:
+                    data[key][i] = add_prefixes(data[key][i], prefix, stem, keys, only_start, exceptions)
+
+        if type(data[key]) is str and ((only_start and data[key].startswith(stem)) or (not only_start and (stem in data[key]))):
+            data[key] = data[key].replace(stem, prefix + stem, 1)
+
+        # then check key
+        if keys and ((only_start and key.startswith(stem)) or (not only_start and (stem in key))):
+            keys_to_change.append(key)
+    
+    # apply key changes
+    # do this in a new loop because we can't change the dict keys as we're iterating through it
+    for key in keys_to_change:
+        new_key = key.replace(stem, prefix + stem, 1)
+        data[new_key] = data[key]
+        data.pop(key, None)
+
+    return data
+
+
+def launch_setup(context, *args, **kwargs):
 
     robot_ip = LaunchConfiguration(robot_ip_parameter_name)
     use_fake_hardware = LaunchConfiguration(use_fake_hardware_parameter_name)
@@ -65,6 +121,7 @@ def generate_launch_description():
     namespace = LaunchConfiguration(namespace_parameter_name)
     isaac = LaunchConfiguration(isaac_parameter_name)
 
+    namespace_modified = str(namespace.perform(context)) + '_' if namespace.perform(context) else ''
     # Command-line arguments
 
     db_arg = DeclareLaunchArgument(
@@ -81,7 +138,7 @@ def generate_launch_description():
         [FindExecutable(name='xacro'), ' ', franka_xacro_file, ' hand:=true',
          ' robot_ip:=', robot_ip, ' use_fake_hardware:=', use_fake_hardware,
          ' fake_sensor_commands:=', fake_sensor_commands, ' ros2_control:=true',
-         ' isaac:=', isaac, ' namespace:=', namespace])
+         ' isaac:=', isaac, ' namespace:=', namespace, ' arm_prefix:=', namespace])
 
     robot_description = {'robot_description': ParameterValue(
         robot_description_config, value_type=str)}
@@ -93,7 +150,7 @@ def generate_launch_description():
 
     robot_description_semantic_config = Command(
         [FindExecutable(name='xacro'), ' ',
-         franka_semantic_xacro_file, ' hand:=true']
+         franka_semantic_xacro_file, ' hand:=true arm_prefix:=', namespace]
     )
 
     robot_description_semantic = {'robot_description_semantic': ParameterValue(
@@ -107,9 +164,10 @@ def generate_launch_description():
         'robot_description_kinematics': kinematics_yaml
     }
 
-    joint_limits_yaml = load_yaml(
+    print("-- Joint Limits --")
+    joint_limits_yaml = add_prefixes(load_yaml(
         'franka_fr3_moveit_config', 'config/fr3_joint_limits.yaml'
-    )
+    ), namespace_modified, 'fr3_')
 
     joint_limits_config = {
         'robot_description_planning': joint_limits_yaml
@@ -139,9 +197,10 @@ def generate_launch_description():
     ompl_planning_pipeline_config['move_group'].update(ompl_planning_yaml)
 
     # Trajectory Execution Functionality
-    moveit_simple_controllers_yaml = load_yaml(
+    print("-- FR3 Controllers -- ")
+    moveit_simple_controllers_yaml = add_prefixes(load_yaml(
         'franka_fr3_moveit_config', 'config/fr3_controllers.yaml'
-    )
+    ), namespace_modified, 'fr3_', keys=False, exceptions=['fr3_arm_controller', 'fr3_gripper'])
     moveit_controllers = {
         'moveit_simple_controller_manager': moveit_simple_controllers_yaml,
         'moveit_controller_manager': 'moveit_simple_controller_manager'
@@ -183,7 +242,7 @@ def generate_launch_description():
     # RViz
     rviz_base = os.path.join(get_package_share_directory(
         'franka_fr3_moveit_config'), 'rviz')
-    rviz_full_config = os.path.join(rviz_base, 'moveit.rviz')
+    rviz_full_config = os.path.join(rviz_base, namespace_modified + 'moveit.rviz')
 
     rviz_node = Node(
         package='rviz2',
@@ -212,7 +271,7 @@ def generate_launch_description():
     ros2_controllers_path = os.path.join(
         get_package_share_directory('franka_fr3_moveit_config'),
         'config',
-        'fr3_ros_controllers.yaml',
+        namespace_modified + 'fr3_ros_controllers.yaml',
     )
     ros2_control_node = Node(
         package='controller_manager',
@@ -260,6 +319,27 @@ def generate_launch_description():
         condition=UnlessCondition(use_fake_hardware),
     )
 
+    gripper_launch_file = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([PathJoinSubstitution(
+            [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
+        launch_arguments={'robot_ip': robot_ip,
+                          use_fake_hardware_parameter_name: use_fake_hardware,
+                          'namespace': namespace}.items(),
+    )
+
+    return [
+         db_arg,
+         rviz_node,
+         robot_state_publisher,
+         run_move_group_node,
+         ros2_control_node,
+         joint_state_publisher,
+         franka_robot_state_broadcaster,
+         gripper_launch_file
+         ] + load_controllers
+
+
+def generate_launch_description():
     robot_arg = DeclareLaunchArgument(
         robot_ip_parameter_name,
         description='Hostname or IP address of the robot.')
@@ -283,26 +363,11 @@ def generate_launch_description():
         default_value='false',
         description="Fake sensor commands. Only valid when '{}' is true".format(
             use_fake_hardware_parameter_name))
-    gripper_launch_file = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([PathJoinSubstitution(
-            [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
-        launch_arguments={'robot_ip': robot_ip,
-                          use_fake_hardware_parameter_name: use_fake_hardware,
-                          'namespace': namespace}.items(),
-    )
+
     return LaunchDescription(
         [robot_arg,
          namespace_arg,
          use_fake_hardware_arg,
          fake_sensor_commands_arg,
-         db_arg,
-         rviz_node,
-         robot_state_publisher,
-         run_move_group_node,
-         ros2_control_node,
-         joint_state_publisher,
-         franka_robot_state_broadcaster,
-         gripper_launch_file
-         ]
-        + load_controllers
+         OpaqueFunction(function=launch_setup)]
     )
