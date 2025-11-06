@@ -37,6 +37,7 @@ from launch.substitutions import (
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+from moveit_configs_utils import MoveItConfigsBuilder
 
 import yaml
 
@@ -57,6 +58,16 @@ def load_yaml(package_name, file_path):
             return yaml.safe_load(file)
     except EnvironmentError:  # parent of IOError, OSError *and* WindowsError where available
         return None
+
+def _apply_prefixes_in_list(data: list, prefix, stem, keys=True, only_start=True, exceptions=[]):
+    for i in range(len(data)):
+        if type(data[i]) is str and data[i] not in exceptions: # TODO: only_start handling
+            data[i] = data[i].replace(stem, prefix + stem, 1)
+        elif type(data[i]) is dict:
+            data[i] = add_prefixes(data[i], prefix, stem, keys, only_start, exceptions)
+        elif type(data[i]) is list:
+            data[i] = _apply_prefixes_in_list(data[i], prefix, stem, keys, only_start, exceptions)
+    return data
 
 def add_prefixes(data: dict, prefix, stem, keys=True, only_start=True, exceptions=[]):
     """
@@ -79,28 +90,22 @@ def add_prefixes(data: dict, prefix, stem, keys=True, only_start=True, exception
     keys_to_change = []
     for key in data:
 
-        # handle exceptions
-        if data[key] in exceptions or key in exceptions:
-            continue
+        # check key
+        if keys and (((only_start and key.startswith(stem)) or (not only_start and (stem in key)))
+                     and key not in exceptions):
+            keys_to_change.append(key)
         
-        # first check value
+        # then check value
         if type(data[key]) is dict:
             data[key] = add_prefixes(data[key], prefix, stem, keys, only_start, exceptions)
             continue
 
-        if type(data[key]) is list:
-            for i in range(len(data[key])):
-                if type(data[key][i]) is str and data[key][i] not in exceptions: # TODO: only_start handling
-                    data[key][i].replace(stem, prefix + stem, 1)
-                elif type(data[key][i]) is dict:
-                    data[key][i] = add_prefixes(data[key][i], prefix, stem, keys, only_start, exceptions)
+        elif type(data[key]) is list:
+            data[key] = _apply_prefixes_in_list(data[key], prefix, stem, keys, only_start, exceptions)
 
-        if type(data[key]) is str and ((only_start and data[key].startswith(stem)) or (not only_start and (stem in data[key]))):
+        elif type(data[key]) is str and ((only_start and data[key].startswith(stem)) or (not only_start and (stem in data[key]))
+                                         and data[key] not in exceptions):
             data[key] = data[key].replace(stem, prefix + stem, 1)
-
-        # then check key
-        if keys and ((only_start and key.startswith(stem)) or (not only_start and (stem in key))):
-            keys_to_change.append(key)
     
     # apply key changes
     # do this in a new loop because we can't change the dict keys as we're iterating through it
@@ -122,6 +127,8 @@ def launch_setup(context, *args, **kwargs):
     isaac = LaunchConfiguration(isaac_parameter_name)
 
     namespace_modified = str(namespace.perform(context)) + '_' if namespace.perform(context) else ''
+    namespace_slash = str(namespace.perform(context)) + '/' if namespace.perform(context) else ''
+    
     # Command-line arguments
 
     db_arg = DeclareLaunchArgument(
@@ -150,21 +157,20 @@ def launch_setup(context, *args, **kwargs):
 
     robot_description_semantic_config = Command(
         [FindExecutable(name='xacro'), ' ',
-         franka_semantic_xacro_file, ' hand:=true arm_prefix:=', namespace]
+         franka_semantic_xacro_file, ' hand:=true arm_prefix:=', namespace_modified]
     )
 
     robot_description_semantic = {'robot_description_semantic': ParameterValue(
         robot_description_semantic_config, value_type=str)}
 
-    kinematics_yaml = load_yaml(
+    kinematics_yaml = add_prefixes(load_yaml(
         'franka_fr3_moveit_config', 'config/kinematics.yaml'
-    )
+    ), namespace_modified, 'fr3_')
 
     kinematics_config = {
         'robot_description_kinematics': kinematics_yaml
     }
 
-    print("-- Joint Limits --")
     joint_limits_yaml = add_prefixes(load_yaml(
         'franka_fr3_moveit_config', 'config/fr3_joint_limits.yaml'
     ), namespace_modified, 'fr3_')
@@ -197,10 +203,9 @@ def launch_setup(context, *args, **kwargs):
     ompl_planning_pipeline_config['move_group'].update(ompl_planning_yaml)
 
     # Trajectory Execution Functionality
-    print("-- FR3 Controllers -- ")
     moveit_simple_controllers_yaml = add_prefixes(load_yaml(
         'franka_fr3_moveit_config', 'config/fr3_controllers.yaml'
-    ), namespace_modified, 'fr3_', keys=False, exceptions=['fr3_arm_controller', 'fr3_gripper'])
+    ), namespace_modified, 'fr3_', exceptions=['fr3_arm_controller', 'fr3_gripper'])
     moveit_controllers = {
         'moveit_simple_controller_manager': moveit_simple_controllers_yaml,
         'moveit_controller_manager': 'moveit_simple_controller_manager'
@@ -221,11 +226,29 @@ def launch_setup(context, *args, **kwargs):
         'publish_transforms_updates': True,
     }
 
+    print('\n\n\n\n\n\n\n\n\n\n\n\n')
+    test = []
+    for elem in [
+            robot_description,
+            robot_description_semantic,
+            kinematics_config,
+            joint_limits_config,
+            ompl_planning_pipeline_config,
+            trajectory_execution,
+            moveit_controllers,
+            planning_scene_monitor_parameters,
+            {'use_sim_time': isaac}
+        ]:
+        test += list(elem.keys())
+    test.sort()
+    print(test)
+    print('\n\n\n\n\n\n\n\n\n\n\n\n')
+
     # Start the actual move_group node/action server
     run_move_group_node = Node(
         package='moveit_ros_move_group',
         executable='move_group',
-        namespace=namespace,
+        namespace=namespace_slash,
         output='screen',
         parameters=[
             robot_description,
@@ -236,8 +259,30 @@ def launch_setup(context, *args, **kwargs):
             trajectory_execution,
             moveit_controllers,
             planning_scene_monitor_parameters,
+            {'use_sim_time': isaac}
         ],
+        # remappings=[
+        #     ('planning_scene', PathJoinSubstitution([namespace, 'planning_scene'])),
+        #     ('planning_scene_world', PathJoinSubstitution([namespace, 'planning_scene_world'])),
+        #     ('monitored_planning_scene', PathJoinSubstitution([namespace, 'monitored_planning_scene'])),
+        # ]
     )
+
+    # moveit_config = (
+    #     MoveItConfigsBuilder("franka_fr3")
+    #     .robot_description(
+    #         file_path="robots/common/fr3/fr3.urdf.xacro",
+    #         mappings={
+    #             "ros2_control_hardware_type": LaunchConfiguration(
+    #                 "ros2_control_hardware_type"
+    #             )
+    #         },
+    #     )
+    #     .robot_description_semantic(file_path="robots/common/fr3/fr3.srdf.xacro")
+    #     .trajectory_execution(file_path="config/gripper_moveit_controllers.yaml")
+    #     .planning_pipelines(pipelines=["ompl", "pilz_industrial_motion_planner"])
+    #     .to_moveit_configs()
+    # )
 
     # RViz
     rviz_base = os.path.join(get_package_share_directory(
@@ -248,6 +293,7 @@ def launch_setup(context, *args, **kwargs):
         package='rviz2',
         executable='rviz2',
         name='rviz2',
+        namespace=namespace_slash,
         output='log',
         arguments=['-d', rviz_full_config],
         parameters=[
@@ -255,6 +301,8 @@ def launch_setup(context, *args, **kwargs):
             robot_description_semantic,
             ompl_planning_pipeline_config,
             kinematics_config,
+            joint_limits_config,
+            {'use_sim_time': isaac}
         ],
     )
 
@@ -263,9 +311,22 @@ def launch_setup(context, *args, **kwargs):
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
-        namespace=namespace,
+        namespace=namespace_slash,
         output='both',
-        parameters=[robot_description],
+        parameters=[robot_description, {'use_sim_time': isaac}],
+    )
+
+    # Publish Isaac Sim compatibility transform
+    isaac_transform_publisher = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='isaac_transform_publisher',
+        namespace=namespace,
+        output='screen',
+        arguments=['0', '0', '0', 
+                   '0', '0', '0', '1',
+                   'franko_fr3_link0', 
+                   'base']
     )
 
     ros2_controllers_path = os.path.join(
@@ -276,9 +337,9 @@ def launch_setup(context, *args, **kwargs):
     ros2_control_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
-        namespace=namespace,
-        parameters=[robot_description, ros2_controllers_path],
-        remappings=[('joint_states', 'franka/joint_states')],
+        namespace=namespace_slash,
+        parameters=[robot_description, ros2_controllers_path, {'use_sim_time': isaac}],
+        # remappings=[('joint_states', 'franka/joint_states')],
         output={
             'stdout': 'screen',
             'stderr': 'screen',
@@ -307,7 +368,8 @@ def launch_setup(context, *args, **kwargs):
         name='joint_state_publisher',
         namespace=namespace,
         parameters=[
-            {'source_list': ['franka/joint_states', 'fr3_gripper/joint_states'], 'rate': 30}],
+            {'source_list': ['franko/joint_states', 'fr3_gripper/joint_states'], 'rate': 30},
+            {'use_sim_time': isaac}],
     )
 
     franka_robot_state_broadcaster = Node(
@@ -317,7 +379,10 @@ def launch_setup(context, *args, **kwargs):
         arguments=['franka_robot_state_broadcaster'],
         output='screen',
         condition=UnlessCondition(use_fake_hardware),
+        parameters=[{'use_sim_time': isaac}],
     )
+
+    only_real_robot_nodes = [joint_state_publisher, franka_robot_state_broadcaster]
 
     gripper_launch_file = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([PathJoinSubstitution(
@@ -327,15 +392,19 @@ def launch_setup(context, *args, **kwargs):
                           'namespace': namespace}.items(),
     )
 
+    # append nodes if needed
+    if (isaac.perform(context).lower() == 'false'):
+        print("Launching for real robot or Gazebo simulation")
+        load_controllers += only_real_robot_nodes
+
     return [
          db_arg,
          rviz_node,
          robot_state_publisher,
          run_move_group_node,
          ros2_control_node,
-         joint_state_publisher,
-         franka_robot_state_broadcaster,
-         gripper_launch_file
+         gripper_launch_file,
+         isaac_transform_publisher
          ] + load_controllers
 
 
@@ -352,7 +421,8 @@ def generate_launch_description():
     use_fake_hardware_arg = DeclareLaunchArgument(
         use_fake_hardware_parameter_name,
         default_value='false',
-        description='Use fake hardware')
+        description='Use fake hardware'
+    )
     isaac_arg = DeclareLaunchArgument(
         isaac_parameter_name,
         default_value='false',
@@ -368,6 +438,7 @@ def generate_launch_description():
         [robot_arg,
          namespace_arg,
          use_fake_hardware_arg,
+         isaac_arg,
          fake_sensor_commands_arg,
          OpaqueFunction(function=launch_setup)]
     )
