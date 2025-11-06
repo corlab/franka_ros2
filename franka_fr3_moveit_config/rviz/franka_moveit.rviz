@@ -44,7 +44,7 @@ Visualization Manager:
       Enabled: true
       Name: MarkerArray
       Namespaces:
-        {}
+        {"/franka"}
       Topic:
         Depth: 100
         Durability Policy: Volatile
@@ -140,9 +140,9 @@ Visualization Manager:
       Value: true
     - Class: moveit_rviz_plugin/PlanningScene
       Enabled: true
-      Move Group Namespace: ""
+      Move Group Namespace: "/franka"
       Name: PlanningScene
-      Planning Scene Topic: /monitored_planning_scene
+      Planning Scene Topic: /franka/monitored_planning_scene
       Robot Description: robot_description
       Scene Geometry:
         Scene Alpha: 0.8999999761581421
@@ -230,7 +230,7 @@ Visualization Manager:
     - Acceleration_Scaling_Factor: 0.1
       Class: moveit_rviz_plugin/MotionPlanning
       Enabled: false
-      Move Group Namespace: ""
+      Move Group Namespace: "/franka"
       MoveIt_Allow_Approximate_IK: false
       MoveIt_Allow_External_Program: false
       MoveIt_Allow_Replanning: false
@@ -268,7 +268,7 @@ Visualization Manager:
         Show Trail: false
         State Display Time: 0.05 s
         Trail Step Size: 1
-        Trajectory Topic: /display_planned_path
+        Trajectory Topic: /franka/display_planned_path
       Planning Metrics:
         Payload: 1
         Show Joint Torques: false
@@ -282,13 +282,13 @@ Visualization Manager:
         Goal State Color: 250; 128; 0
         Interactive Marker Size: 0
         Joint Violation Color: 255; 0; 255
-        Planning Group: fr3_manipulator
+        Planning Group: franka_fr3_arm
         Query Goal State: true
         Query Start State: false
         Show Workspace: false
         Start State Alpha: 1
         Start State Color: 0; 255; 0
-      Planning Scene Topic: /monitored_planning_scene
+      Planning Scene Topic: /franka/monitored_planning_scene
       Robot Description: robot_description
       Scene Geometry:
         Scene Alpha: 0.8999999761581421
@@ -313,7 +313,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: world
+    Fixed Frame: base
     Frame Rate: 30
   Name: root
   Tools:

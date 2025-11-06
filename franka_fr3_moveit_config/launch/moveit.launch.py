@@ -325,7 +325,7 @@ def launch_setup(context, *args, **kwargs):
         output='screen',
         arguments=['0', '0', '0', 
                    '0', '0', '0', '1',
-                   'franko_fr3_link0', 
+                   namespace_modified + 'fr3_link0', 
                    'base']
     )
 
@@ -368,7 +368,7 @@ def launch_setup(context, *args, **kwargs):
         name='joint_state_publisher',
         namespace=namespace,
         parameters=[
-            {'source_list': ['franko/joint_states', 'fr3_gripper/joint_states'], 'rate': 30},
+            {'source_list': [namespace_slash + 'joint_states', 'fr3_gripper/joint_states'], 'rate': 30},
             {'use_sim_time': isaac}],
     )
 
