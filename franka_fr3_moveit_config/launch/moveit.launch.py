@@ -126,9 +126,13 @@ def launch_setup(context, *args, **kwargs):
     namespace = LaunchConfiguration(namespace_parameter_name)
     isaac = LaunchConfiguration(isaac_parameter_name)
 
+    # define modified parameters
     namespace_modified = str(namespace.perform(context)) + '_' if namespace.perform(context) else ''
     namespace_slash = str(namespace.perform(context)) + '/' if namespace.perform(context) else ''
-    
+
+    if isaac.perform(context).lower() == 'true':
+        use_fake_hardware = 'true'
+
     # Command-line arguments
 
     db_arg = DeclareLaunchArgument(
@@ -226,24 +230,6 @@ def launch_setup(context, *args, **kwargs):
         'publish_transforms_updates': True,
     }
 
-    print('\n\n\n\n\n\n\n\n\n\n\n\n')
-    test = []
-    for elem in [
-            robot_description,
-            robot_description_semantic,
-            kinematics_config,
-            joint_limits_config,
-            ompl_planning_pipeline_config,
-            trajectory_execution,
-            moveit_controllers,
-            planning_scene_monitor_parameters,
-            {'use_sim_time': isaac}
-        ]:
-        test += list(elem.keys())
-    test.sort()
-    print(test)
-    print('\n\n\n\n\n\n\n\n\n\n\n\n')
-
     # Start the actual move_group node/action server
     run_move_group_node = Node(
         package='moveit_ros_move_group',
@@ -261,28 +247,8 @@ def launch_setup(context, *args, **kwargs):
             planning_scene_monitor_parameters,
             {'use_sim_time': isaac}
         ],
-        # remappings=[
-        #     ('planning_scene', PathJoinSubstitution([namespace, 'planning_scene'])),
-        #     ('planning_scene_world', PathJoinSubstitution([namespace, 'planning_scene_world'])),
-        #     ('monitored_planning_scene', PathJoinSubstitution([namespace, 'monitored_planning_scene'])),
-        # ]
     )
 
-    # moveit_config = (
-    #     MoveItConfigsBuilder("franka_fr3")
-    #     .robot_description(
-    #         file_path="robots/common/fr3/fr3.urdf.xacro",
-    #         mappings={
-    #             "ros2_control_hardware_type": LaunchConfiguration(
-    #                 "ros2_control_hardware_type"
-    #             )
-    #         },
-    #     )
-    #     .robot_description_semantic(file_path="robots/common/fr3/fr3.srdf.xacro")
-    #     .trajectory_execution(file_path="config/gripper_moveit_controllers.yaml")
-    #     .planning_pipelines(pipelines=["ompl", "pilz_industrial_motion_planner"])
-    #     .to_moveit_configs()
-    # )
 
     # RViz
     rviz_base = os.path.join(get_package_share_directory(
@@ -411,6 +377,7 @@ def launch_setup(context, *args, **kwargs):
 def generate_launch_description():
     robot_arg = DeclareLaunchArgument(
         robot_ip_parameter_name,
+        default_value='none',  # added a default value here since using the robot with Isaac Sim does not need an IP.
         description='Hostname or IP address of the robot.')
 
     namespace_arg = DeclareLaunchArgument(
