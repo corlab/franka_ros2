@@ -77,4 +77,22 @@
             The Gripper example controller demonstrates the use of the Robot gripper.
         </description>
     </class>
+    <class name="franka_example_controllers/TfController"
+           type="franka_example_controllers::TfController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The TF example controller moves in the task frame.
+        </description>
+    </class>
+    <class name="franka_example_controllers/CartesianImpedanceExampleController"
+           type="franka_example_controllers::CartesianImpedanceExampleController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The cartesian impedance example controller moves in a periodic movement.
+        </description>
+    </class>
+    <class name="franka_example_controllers/CartesianImpendanceTfController"
+           type="franka_example_controllers::CartesianImpendanceTfController" base_class_type="controller_interface::ControllerInterface">
+        <description>
+            The cartesian impedance TF example controller moves in the task frame with impedance control.
+        </description>
+    </class>
 </library>
