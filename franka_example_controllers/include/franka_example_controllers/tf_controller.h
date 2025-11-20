@@ -12,16 +12,13 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_lifecycle/state.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <franka/robot_state.h>
 
 #include "franka_semantic_components/franka_robot_model.hpp"
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
 namespace franka_example_controllers {
-
-namespace franka {
-class RobotState;
-}
 
 class TfController : public controller_interface::ControllerInterface {
  public:

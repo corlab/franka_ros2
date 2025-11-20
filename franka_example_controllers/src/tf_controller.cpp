@@ -11,7 +11,8 @@
 
 #include "franka_example_controllers/pseudo_inversion.h"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
-#include "franka/robot_state.h"
+#include "hardware_interface/types/hardware_interface_return_values.hpp"
+#include "hardware_interface/types/hardware_interface_type_values.hpp"
 
 #include <cstring>
 namespace {
@@ -249,10 +250,10 @@ CallbackReturn TfController::on_activate(const rclcpp_lifecycle::State& /*previo
   // find the franka robot state pointer from loaned state interfaces so we can read tau_J_d
   std::string franka_state_iface_name = arm_id_ + "/" + k_robot_state_interface_name;
   auto it = std::find_if(state_interfaces_.begin(), state_interfaces_.end(), [&](const auto& iface) {
-    return iface.get().get_name() == franka_state_iface_name;
+    return iface.get_name() == franka_state_iface_name;
   });
   if (it != state_interfaces_.end()) {
-    robot_state_ptr_ = bit_cast<franka::RobotState*>((*it).get().get_optional().value());
+    robot_state_ptr_ = bit_cast<franka::RobotState*>((*it).get_optional().value());
   } else {
     RCLCPP_WARN(get_node()->get_logger(), "Could not find franka robot_state interface to read tau_J_d");
     robot_state_ptr_ = nullptr;
