@@ -183,6 +183,11 @@ def launch_setup(context, *args, **kwargs):
         'robot_description_planning': joint_limits_yaml
     }
 
+    cartesian_limits_yaml = load_yaml(
+        'franka_fr3_moveit_config', 'config/cartesian_limits.yaml'
+    )
+    cartesian_limits_config = cartesian_limits_yaml if cartesian_limits_yaml else {}
+
     # Planning Functionality
     ompl_planning_pipeline_config = {
         'move_group': {
@@ -209,7 +214,7 @@ def launch_setup(context, *args, **kwargs):
     # Trajectory Execution Functionality
     moveit_simple_controllers_yaml = add_prefixes(load_yaml(
         'franka_fr3_moveit_config', 'config/fr3_controllers.yaml'
-    ), namespace_modified, 'fr3_', exceptions=['fr3_arm_controller', 'fr3_gripper'])
+    ), namespace_modified, 'fr3_', exceptions=['fr3_arm_controller', 'fr3_gripper_controller'])
     moveit_controllers = {
         'moveit_simple_controller_manager': moveit_simple_controllers_yaml,
         'moveit_controller_manager': 'moveit_simple_controller_manager'
@@ -230,6 +235,10 @@ def launch_setup(context, *args, **kwargs):
         'publish_transforms_updates': True,
     }
 
+    move_group_capabilities = {
+        'capabilities': 'move_group/ExecuteTaskSolutionCapability'
+    }
+
     # Start the actual move_group node/action server
     run_move_group_node = Node(
         package='moveit_ros_move_group',
@@ -241,10 +250,12 @@ def launch_setup(context, *args, **kwargs):
             robot_description_semantic,
             kinematics_config,
             joint_limits_config,
+            cartesian_limits_config,
             ompl_planning_pipeline_config,
             trajectory_execution,
             moveit_controllers,
             planning_scene_monitor_parameters,
+            move_group_capabilities,
             {'use_sim_time': isaac}
         ],
     )
@@ -268,6 +279,7 @@ def launch_setup(context, *args, **kwargs):
             ompl_planning_pipeline_config,
             kinematics_config,
             joint_limits_config,
+            cartesian_limits_config,
             {'use_sim_time': isaac}
         ],
     )
@@ -315,7 +327,7 @@ def launch_setup(context, *args, **kwargs):
 
     # Load controllers
     load_controllers = []
-    for controller in ['fr3_arm_controller', 'joint_state_broadcaster']:
+    for controller in ['fr3_arm_controller', 'fr3_gripper_controller', 'joint_state_broadcaster']:
         load_controllers.append(
             ExecuteProcess(
                 cmd=[
@@ -334,7 +346,7 @@ def launch_setup(context, *args, **kwargs):
         name='joint_state_publisher',
         namespace=namespace,
         parameters=[
-            {'source_list': [namespace_slash + 'joint_states', 'fr3_gripper/joint_states'], 'rate': 30},
+            {'source_list': [namespace_slash + 'joint_states', 'fr3_gripper_controller/joint_states']},
             {'use_sim_time': isaac}],
     )
 
