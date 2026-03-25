@@ -11,6 +11,9 @@
 
       franka_robot_state_broadcaster:
         type: franka_robot_state_broadcaster/FrankaRobotStateBroadcaster
+      
+      fr3_gripper_controller:
+        type: position_controllers/GripperActionController
 
 /**:
   franka_robot_state_broadcaster:
@@ -46,3 +49,8 @@
         franka_fr3_joint5: { p: 250., d: 10., i: 0., i_clamp: 1. }
         franka_fr3_joint6: { p: 150., d: 10., i: 0., i_clamp: 1. }
         franka_fr3_joint7: { p: 50., d: 5., i: 0., i_clamp: 1. }
+
+/**:
+  fr3_gripper_controller:
+    ros__parameters:
+      joint: franka_fr3_finger_joint1
