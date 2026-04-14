@@ -24,7 +24,8 @@ from launch.actions import (
     ExecuteProcess,
     IncludeLaunchDescription,
     Shutdown,
-    OpaqueFunction
+    OpaqueFunction,
+    LogInfo
 )
 from launch.conditions import UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -154,10 +155,29 @@ def launch_setup(context, *args, **kwargs):
     robot_description = {'robot_description': ParameterValue(
         robot_description_config, value_type=str)}
 
-    franka_semantic_xacro_file = os.path.join(
-        get_package_share_directory('franka_description'),
-        'robots', 'fr3', 'fr3.srdf.xacro'
-    )
+    # if namespace is franko, try to find franko's srdf first
+    srdf_info = None
+    if namespace.perform(context) == 'franko':
+        try:
+            franko_package = get_package_share_directory('franko_fr3_hand_moveit_config')
+            franka_semantic_xacro_file = os.path.join(
+                franko_package, 'config', 'fr3.srdf'
+            )
+            srdf_info = LogInfo(msg="Successfully found Franko SRDF!")
+        except:
+            # franko package not found, just use default franka file
+            srdf_info = LogInfo(msg="Warning: Franko SRDF was not found!! This impacts the behavior of certain humation components and will lead to errors!")
+            franka_semantic_xacro_file = os.path.join(
+                get_package_share_directory('franka_description'),
+                'robots', 'fr3', 'fr3.srdf.xacro'
+            )
+    
+    else:
+        franka_semantic_xacro_file = os.path.join(
+            get_package_share_directory('franka_description'),
+            'robots', 'fr3', 'fr3.srdf.xacro'
+        )
+        srdf_info = LogInfo(msg="Successfully found Franka SRDF.")
 
     robot_description_semantic_config = Command(
         [FindExecutable(name='xacro'), ' ',
@@ -382,7 +402,8 @@ def launch_setup(context, *args, **kwargs):
          run_move_group_node,
          ros2_control_node,
          gripper_launch_file,
-         isaac_transform_publisher
+         isaac_transform_publisher,
+         srdf_info
          ] + load_controllers
 
 
