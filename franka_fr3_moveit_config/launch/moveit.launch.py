@@ -181,7 +181,7 @@ def launch_setup(context, *args, **kwargs):
 
     robot_description_semantic_config = Command(
         [FindExecutable(name='xacro'), ' ',
-         franka_semantic_xacro_file, ' hand:=true arm_prefix:=', namespace_modified]
+         franka_semantic_xacro_file, ' hand:=true arm_prefix:=', namespace_modified + 'fr3_' if namespace is not '' else '']
     )
 
     robot_description_semantic = {'robot_description_semantic': ParameterValue(
