@@ -276,7 +276,8 @@ def launch_setup(context, *args, **kwargs):
             moveit_controllers,
             planning_scene_monitor_parameters,
             move_group_capabilities,
-            {'use_sim_time': isaac}
+            {'use_sim_time': isaac},
+            {"publish_robot_description_semantic": True}
         ],
     )
 
@@ -403,7 +404,7 @@ def launch_setup(context, *args, **kwargs):
          ros2_control_node,
          gripper_launch_file,
          isaac_transform_publisher,
-         srdf_info
+         srdf_info,
          ] + load_controllers
 
 
