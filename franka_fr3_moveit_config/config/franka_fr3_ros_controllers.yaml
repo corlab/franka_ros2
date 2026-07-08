@@ -33,6 +33,7 @@
       state_interfaces:
         - position
         - velocity
+      allow_nonzero_final_velocity: true
       joints:
         - franka_fr3_joint1
         - franka_fr3_joint2
@@ -41,6 +42,16 @@
         - franka_fr3_joint5
         - franka_fr3_joint6
         - franka_fr3_joint7
+      constraints:
+        goal_time: 1.0
+        stopped_velocity_tolerance: 0.05
+        franka_fr3_joint1: { goal: 0.05 }
+        franka_fr3_joint2: { goal: 0.05 }
+        franka_fr3_joint3: { goal: 0.05 }
+        franka_fr3_joint4: { goal: 0.05 }
+        franka_fr3_joint5: { goal: 0.05 }
+        franka_fr3_joint6: { goal: 0.05 }
+        franka_fr3_joint7: { goal: 0.05 }
       gains:
         franka_fr3_joint1: { p: 600., d: 30., i: 0., i_clamp: 1. }
         franka_fr3_joint2: { p: 600., d: 30., i: 0., i_clamp: 1. }

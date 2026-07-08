@@ -35,6 +35,7 @@ from launch.substitutions import (
     LaunchConfiguration,
     PathJoinSubstitution
 )
+from launch.actions import TimerAction
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -89,6 +90,7 @@ def add_prefixes(data: dict, prefix, stem, keys=True, only_start=True, exception
 
     # loop through all keys
     keys_to_change = []
+
     for key in data:
 
         # check key
@@ -97,13 +99,16 @@ def add_prefixes(data: dict, prefix, stem, keys=True, only_start=True, exception
             keys_to_change.append(key)
         
         # then check value
+        # if the value is a dictionary itself, call this function recursively
         if type(data[key]) is dict:
             data[key] = add_prefixes(data[key], prefix, stem, keys, only_start, exceptions)
             continue
 
+        # if it is a list apply prefix in all entries of the list
         elif type(data[key]) is list:
             data[key] = _apply_prefixes_in_list(data[key], prefix, stem, keys, only_start, exceptions)
 
+        # if it is a string, check if the prefix needs to be applied to this string as well
         elif type(data[key]) is str and ((only_start and data[key].startswith(stem)) or (not only_start and (stem in data[key]))
                                          and data[key] not in exceptions):
             data[key] = data[key].replace(stem, prefix + stem, 1)
@@ -112,6 +117,8 @@ def add_prefixes(data: dict, prefix, stem, keys=True, only_start=True, exception
     # do this in a new loop because we can't change the dict keys as we're iterating through it
     for key in keys_to_change:
         new_key = key.replace(stem, prefix + stem, 1)
+        if key == new_key:
+            continue
         data[new_key] = data[key]
         data.pop(key, None)
 
@@ -187,13 +194,17 @@ def launch_setup(context, *args, **kwargs):
     robot_description_semantic = {'robot_description_semantic': ParameterValue(
         robot_description_semantic_config, value_type=str)}
 
-    kinematics_yaml = add_prefixes(load_yaml(
+    kinematics_yaml_raw = load_yaml(
         'franka_fr3_moveit_config', 'config/kinematics.yaml'
-    ), namespace_modified, 'fr3_')
+    )
+    kinematics_yaml = add_prefixes(kinematics_yaml_raw, namespace_modified, 'fr3_')
+    print(f"Kinematics yaml after adding prefixes:\n{kinematics_yaml}\n\n")
 
     kinematics_config = {
         'robot_description_kinematics': kinematics_yaml
     }
+
+    print(f"Kinematics config:\n{kinematics_config}")
 
     joint_limits_yaml = add_prefixes(load_yaml(
         'franka_fr3_moveit_config', 'config/fr3_joint_limits.yaml'
@@ -400,8 +411,8 @@ def launch_setup(context, *args, **kwargs):
          db_arg,
          rviz_node,
          robot_state_publisher,
-         run_move_group_node,
-         ros2_control_node,
+         LogInfo(msg=f"\n\nkinematics_yaml_raw: {kinematics_yaml_raw}\n\n"),
+         TimerAction(period=10.0, actions=[run_move_group_node, ros2_control_node]),
          gripper_launch_file,
          isaac_transform_publisher,
          srdf_info,
